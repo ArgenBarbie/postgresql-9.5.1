@@ -96,6 +96,9 @@ int			max_stack_depth = 100;
 /* wait N seconds to allow attach from a debugger */
 int			PostAuthDelay = 0;
 
+const char *tpce_debug_query_prefix1 = "select t_id,t_dts";
+const char *tpce_debug_query_prefix2 = "select th_dts, t_qty";
+const char *tpce_tradelookup_frame4_prefix1 = "select t_id from e_trade where t_ca_id";
 
 
 /* ----------------
@@ -4018,14 +4021,59 @@ PostgresMain(int argc, char *argv[],
 				{
 					const char *query_string;
 
+					char tpce_query_string[2000];
+					int tpce_v1 = 0;
+					int tpce_v2 = 0;
+					int tpce_switch = 0;
+					memset(tpce_query_string, 0, 2000);
+
 					/* Set statement_timestamp() */
 					SetCurrentStatementStartTimestamp();
 
 					query_string = pq_getmsgstring(&input_message);
+
+					if (strlen(query_string) < 1999)
+						tpce_switch = 1;
+					else
+						tpce_switch = 0;
+
+					if (tpce_switch == 1)
+					{
+						strcpy(tpce_query_string, query_string);
+						//if (strncasecmp(query_string, tpce_tradeupdate_frame3_prefix1, strlen(tpce_tradeupdate_frame3_prefix1)) == 0)
+						//    printf("hehe %s\n",query_string);
+						if (strncasecmp(query_string, tpce_debug_query_prefix1, strlen(tpce_debug_query_prefix1)) == 0)
+							strcat(tpce_query_string, " limit 30");
+						if (strncasecmp(query_string, tpce_tradelookup_frame4_prefix1, strlen(tpce_tradelookup_frame4_prefix1)) == 0)
+							strcat(tpce_query_string, " limit 20");
+						if (strncasecmp(query_string, tpce_debug_query_prefix2, strlen(tpce_debug_query_prefix2)) == 0)
+						{
+							memset(tpce_query_string, 0, 2000);
+							strcpy(tpce_query_string, "Select th_dts, t_qty, t_s_symb, t_id, st_name from (select t_qty, t_s_symb, t_id from e_trade where t_ca_id = ");
+							tpce_v1 = strlen(tpce_query_string);
+							for (tpce_v2 = 0; tpce_v2 < strlen(query_string); ++tpce_v2)
+							{
+								if (isdigit(query_string[tpce_v2]))
+								{
+									while (isdigit(query_string[tpce_v2]))
+									{
+										tpce_query_string[tpce_v1] = query_string[tpce_v2];
+										++tpce_v1;
+										++tpce_v2;
+									}
+									break;
+								}
+							}
+							strcat(tpce_query_string, "order by t_dts desc limit 10) as foo, e_trade_history, e_status_type where th_t_id = t_id and st_id = th_st_id order by th_dts desc");
+						}
+					}
+
 					pq_getmsgend(&input_message);
 
 					if (am_walsender)
 						exec_replication_command(query_string);
+					else if (tpce_switch == 1)
+						exec_simple_query(tpce_query_string);
 					else
 						exec_simple_query(query_string);
 
