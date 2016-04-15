@@ -177,6 +177,7 @@ typedef union BufferDescPadded
 {
 	BufferDesc	bufferdesc;
 	char		pad[BUFFERDESC_PAD_TO_SIZE];
+	//char		pad[BUFFERDESC_PAD_TO_SIZE]; //yyx
 } BufferDescPadded;
 
 #define GetBufferDescriptor(id) (&BufferDescriptors[(id)].bufferdesc)
